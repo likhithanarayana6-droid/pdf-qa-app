@@ -12,7 +12,6 @@ from langchain_core.prompts import ChatPromptTemplate
 # -----------------------------
 @st.cache_resource
 def create_vector_store(_file_bytes):
-
     # Save uploaded PDF
     with open("temp.pdf", "wb") as f:
         f.write(_file_bytes)
@@ -26,33 +25,23 @@ def create_vector_store(_file_bytes):
         chunk_size=2000,
         chunk_overlap=100
     )
-
     chunks = splitter.split_documents(documents)
 
-    texts = [
-        doc.page_content.strip()
-        for doc in chunks
-        if doc.page_content.strip()
-    ]
-
-    if len(texts) == 0:
-        st.error("No readable text found in the PDF.")
-        st.stop()
-
+    # Local embeddings
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
+    texts = [doc.page_content for doc in chunks]
     db = FAISS.from_texts(texts, embeddings)
 
     return db, len(chunks)
-
 
 # -----------------------------
 # STREAMLIT UI
 # -----------------------------
 st.set_page_config(
-    page_title="PDF Q&A",
+    page_title="PDF Q&A (Gemini)",
     layout="centered"
 )
 
@@ -64,7 +53,6 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file:
-
     with st.spinner("Processing PDF..."):
         db, chunk_count = create_vector_store(uploaded_file.getvalue())
 
@@ -72,30 +60,22 @@ if uploaded_file:
     st.write(f"📦 Total chunks created: **{chunk_count}**")
 
     st.divider()
-
     st.subheader("💬 Ask questions about the PDF")
 
     question = st.text_input("Enter your question")
 
     if question:
-
         with st.spinner("Thinking..."):
-
-            retriever = db.as_retriever(
-                search_kwargs={"k": 3}
-            )
-
-            docs = retriever.invoke(question)
-
-            context = "\n\n".join(
-                doc.page_content for doc in docs
-            )
+            retriever = db.as_retriever(search_kwargs={"k": 3})
 
             llm = ChatGoogleGenerativeAI(
                 model="gemini-2.0-flash",
                 google_api_key=st.secrets["GOOGLE_API_KEY"],
                 temperature=0
             )
+
+            docs = retriever.invoke(question)
+            context = "\n\n".join(doc.page_content for doc in docs)
 
             prompt = ChatPromptTemplate.from_messages([
                 (
@@ -110,24 +90,16 @@ if uploaded_file:
                 )
             ])
 
-        chain = prompt | llm
-
-try:
-    response = chain.invoke({
-        "context": context,
-        "question": question
-    })
-
-    st.markdown("### ✅ Answer")
-    st.write(response.content)
-
-except Exception as e:
-    import traceback
-
-    st.error(f"Error: {e}")
-    st.code(traceback.format_exc())
-
-    st.stop()
+            chain = prompt | llm
+            try:
+                response = chain.invoke({
+                    "context": context,
+                    "question": question
+                })
+            except Exception as e:
+                st.exception(e)
+                st.stop()
 
         st.markdown("### ✅ Answer")
         st.write(response.content)
+

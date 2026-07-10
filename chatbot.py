@@ -92,7 +92,7 @@ if uploaded_file:
             )
 
             llm = ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash",
+                model="gemini-2.0-flash",
                 google_api_key=st.secrets["GOOGLE_API_KEY"],
                 temperature=0
             )
@@ -110,12 +110,24 @@ if uploaded_file:
                 )
             ])
 
-            chain = prompt | llm
+        chain = prompt | llm
 
-            response = chain.invoke({
-                "context": context,
-                "question": question
-            })
+try:
+    response = chain.invoke({
+        "context": context,
+        "question": question
+    })
+
+    st.markdown("### ✅ Answer")
+    st.write(response.content)
+
+except Exception as e:
+    import traceback
+
+    st.error(f"Error: {e}")
+    st.code(traceback.format_exc())
+
+    st.stop()
 
         st.markdown("### ✅ Answer")
         st.write(response.content)

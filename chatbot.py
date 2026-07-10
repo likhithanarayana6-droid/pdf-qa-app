@@ -69,7 +69,7 @@ if uploaded_file:
             retriever = db.as_retriever(search_kwargs={"k": 3})
 
             llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
+                model="gemini-1.0-flash",
                 google_api_key=st.secrets["GOOGLE_API_KEY"],
                 temperature=0
             )

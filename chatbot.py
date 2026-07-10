@@ -4,7 +4,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.chat_models import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
 # -----------------------------
@@ -27,12 +27,13 @@ def create_vector_store(_file_bytes):
     )
     chunks = splitter.split_documents(documents)
 
-    # Local embeddings
+    # Create embeddings
     embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2"
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
     texts = [doc.page_content for doc in chunks]
+
     db = FAISS.from_texts(texts, embeddings)
 
     return db, len(chunks)
@@ -41,11 +42,11 @@ def create_vector_store(_file_bytes):
 # STREAMLIT UI
 # -----------------------------
 st.set_page_config(
-    page_title="PDF Q&A (Ollama Local LLM)",
+    page_title="PDF RAG Chatbot",
     layout="centered"
 )
 
-st.title("📄 PDF → FAISS → Ollama Q&A")
+st.title("📄 PDF RAG Chatbot (Gemini + FAISS)")
 
 uploaded_file = st.file_uploader(
     "Upload a PDF",
@@ -53,6 +54,7 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file:
+
     with st.spinner("Processing PDF..."):
         db, chunk_count = create_vector_store(uploaded_file.getvalue())
 
@@ -65,37 +67,46 @@ if uploaded_file:
     question = st.text_input("Enter your question")
 
     if question:
+
         with st.spinner("Thinking..."):
+
             retriever = db.as_retriever(search_kwargs={"k": 3})
 
-            llm = ChatOllama(
-                model="llama3",
-                base_url="http://127.0.0.1:11434",
+            docs = retriever.invoke(question)
+
+            context = "\n\n".join(
+                doc.page_content for doc in docs
+            )
+
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-2.5-flash",
+                google_api_key=st.secrets["GOOGLE_API_KEY"],
                 temperature=0
             )
 
-            docs = retriever.invoke(question)
-            context = "\n\n".join(doc.page_content for doc in docs)
-
-            prompt = ChatPromptTemplate.from_messages([
-                (
-                    "system",
-                    "You are a helpful assistant. "
-                    "Answer ONLY using the provided context. "
-                    "If the answer is not in the context, say 'I don't know.'"
-                ),
-                (
-                    "human",
-                    "Context:\n{context}\n\nQuestion:\n{question}"
-                )
-            ])
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        "You are a helpful assistant. "
+                        "Answer ONLY using the provided context. "
+                        "If the answer is not found in the context, reply with 'I don't know.'"
+                    ),
+                    (
+                        "human",
+                        "Context:\n{context}\n\nQuestion:\n{question}"
+                    )
+                ]
+            )
 
             chain = prompt | llm
-            response = chain.invoke({
-                "context": context,
-                "question": question
-            })
+
+            response = chain.invoke(
+                {
+                    "context": context,
+                    "question": question
+                }
+            )
 
         st.markdown("### ✅ Answer")
         st.write(response.content)
-

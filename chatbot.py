@@ -11,6 +11,43 @@ from langchain_core.prompts import ChatPromptTemplate
 # VECTOR STORE CREATION (CACHED)
 # -----------------------------
 @st.cache_resource
+st.markdown("""
+<style>
+.main{
+    background:#f5f7fb;
+}
+
+.block-container{
+    padding-top:2rem;
+}
+
+.title{
+    text-align:center;
+    font-size:42px;
+    font-weight:bold;
+    color:#1565C0;
+}
+
+.subtitle{
+    text-align:center;
+    color:gray;
+    font-size:18px;
+    margin-bottom:25px;
+}
+
+.stButton>button{
+    width:100%;
+    border-radius:10px;
+}
+
+[data-testid="metric-container"]{
+    background:white;
+    padding:15px;
+    border-radius:12px;
+    box-shadow:0px 2px 10px rgba(0,0,0,.1);
+}
+</style>
+""", unsafe_allow_html=True)
 def create_vector_store(_file_bytes):
     # Save uploaded PDF
     with open("temp.pdf", "wb") as f:
@@ -46,28 +83,61 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("📄 PDF RAG Chatbot (Gemini + FAISS)")
+st.markdown("""
+<div class="title">
+🤖 PDF RAG Chatbot
+</div>
+
+<div class="subtitle">
+Ask questions from any PDF using Gemini AI
+</div>
+""", unsafe_allow_html=True)
+with st.sidebar:
+
+    st.title("📚 PDF RAG")
+
+    st.markdown("---")
+
+    st.success("Gemini AI")
+
+    st.success("FAISS")
+
+    st.success("LangChain")
+
+    st.success("Sentence Transformers")
+
+    st.markdown("---")
+
+    st.info("Upload a PDF and ask questions.")
+
+st.subheader("📄 Upload PDF")
 
 uploaded_file = st.file_uploader(
-    "Upload a PDF",
+    "",
     type=["pdf"]
 )
-
 if uploaded_file:
 
     with st.spinner("Processing PDF..."):
         db, chunk_count = create_vector_store(uploaded_file.getvalue())
 
     st.success("✅ PDF processed successfully!")
-    st.write(f"📦 Total chunks created: **{chunk_count}**")
+   c1,c2,c3 = st.columns(3)
+
+c1.metric("Chunks",chunk_count)
+
+c2.metric("Model","Gemini")
+
+c3.metric("Retriever","FAISS")
 
     st.divider()
-    st.subheader("💬 Ask questions about the PDF")
+   st.subheader("💬 Ask Your Question")
 
-    question = st.text_input("Enter your question")
+    question = st.chat_input("Ask anything about your PDF...")
 
     if question:
-
+        with st.chat_message("user"):
+             st.write(question)
         with st.spinner("Thinking..."):
 
             retriever = db.as_retriever(search_kwargs={"k": 3})
@@ -108,5 +178,5 @@ if uploaded_file:
                 }
             )
 
-        st.markdown("### ✅ Answer")
-        st.write(response.content)
+      with st.chat_message("assistant"):
+    st.write(response.content)

@@ -12,6 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate
 # -----------------------------
 @st.cache_resource
 def create_vector_store(_file_bytes):
+
     # Save uploaded PDF
     with open("temp.pdf", "wb") as f:
         f.write(_file_bytes)
@@ -25,28 +26,37 @@ def create_vector_store(_file_bytes):
         chunk_size=2000,
         chunk_overlap=100
     )
+
     chunks = splitter.split_documents(documents)
 
-    # Create embeddings
+    texts = [
+        doc.page_content.strip()
+        for doc in chunks
+        if doc.page_content.strip()
+    ]
+
+    if len(texts) == 0:
+        st.error("No readable text found in the PDF.")
+        st.stop()
+
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
-
-    texts = [doc.page_content for doc in chunks]
 
     db = FAISS.from_texts(texts, embeddings)
 
     return db, len(chunks)
 
+
 # -----------------------------
 # STREAMLIT UI
 # -----------------------------
 st.set_page_config(
-    page_title="PDF RAG Chatbot",
+    page_title="PDF Q&A",
     layout="centered"
 )
 
-st.title("📄 PDF RAG Chatbot (Gemini + FAISS)")
+st.title("📄 PDF → FAISS → Gemini Q&A")
 
 uploaded_file = st.file_uploader(
     "Upload a PDF",
@@ -62,6 +72,7 @@ if uploaded_file:
     st.write(f"📦 Total chunks created: **{chunk_count}**")
 
     st.divider()
+
     st.subheader("💬 Ask questions about the PDF")
 
     question = st.text_input("Enter your question")
@@ -70,7 +81,9 @@ if uploaded_file:
 
         with st.spinner("Thinking..."):
 
-            retriever = db.as_retriever(search_kwargs={"k": 3})
+            retriever = db.as_retriever(
+                search_kwargs={"k": 3}
+            )
 
             docs = retriever.invoke(question)
 
@@ -84,29 +97,25 @@ if uploaded_file:
                 temperature=0
             )
 
-            prompt = ChatPromptTemplate.from_messages(
-                [
-                    (
-                        "system",
-                        "You are a helpful assistant. "
-                        "Answer ONLY using the provided context. "
-                        "If the answer is not found in the context, reply with 'I don't know.'"
-                    ),
-                    (
-                        "human",
-                        "Context:\n{context}\n\nQuestion:\n{question}"
-                    )
-                ]
-            )
+            prompt = ChatPromptTemplate.from_messages([
+                (
+                    "system",
+                    "You are a helpful assistant. "
+                    "Answer ONLY using the provided context. "
+                    "If the answer is not in the context, say 'I don't know.'"
+                ),
+                (
+                    "human",
+                    "Context:\n{context}\n\nQuestion:\n{question}"
+                )
+            ])
 
             chain = prompt | llm
 
-            response = chain.invoke(
-                {
-                    "context": context,
-                    "question": question
-                }
-            )
+            response = chain.invoke({
+                "context": context,
+                "question": question
+            })
 
         st.markdown("### ✅ Answer")
         st.write(response.content)

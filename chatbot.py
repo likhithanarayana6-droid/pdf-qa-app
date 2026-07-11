@@ -1,5 +1,6 @@
 import streamlit as st
-
+from langchain_google_genai import ChatGoogleGenerativeAI
+from google.api_core.exceptions import ResourceExhausted
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
@@ -68,11 +69,11 @@ if uploaded_file:
         with st.spinner("Thinking..."):
             retriever = db.as_retriever(search_kwargs={"k": 3})
 
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
-                google_api_key=st.secrets["GOOGLE_API_KEY"],
-                temperature=0
-            )
+        llm = ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash",
+        google_api_key=GOOGLE_API_KEY,
+        temperature=0.3
+           )
 
             docs = retriever.invoke(question)
             context = "\n\n".join(doc.page_content for doc in docs)
@@ -96,6 +97,15 @@ if uploaded_file:
                     "context": context,
                     "question": question
                 })
+                answer = response.content
+                except ResourceExhausted:
+    answer = """
+    ⚠️ Gemini API quota exceeded.
+
+    Please try again later or update your Gemini API billing plan.
+
+    The document search is working, but AI response generation is temporarily unavailable.
+    """
             except Exception as e:
                 st.exception(e)
                 st.stop()

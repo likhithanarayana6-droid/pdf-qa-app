@@ -75,8 +75,8 @@ if uploaded_file:
         temperature=0.3
            )
 
-            docs = retriever.invoke(question)
-            context = "\n\n".join(doc.page_content for doc in docs)
+         docs = retriever.invoke(question)
+         context = "\n\n".join(doc.page_content for doc in docs)
 
             prompt = ChatPromptTemplate.from_messages([
                 (
